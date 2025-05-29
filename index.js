@@ -9,7 +9,8 @@ admin.initializeApp({
 });
 const db = admin.firestore();
 
-const TEAMS_WEBHOOK_URL = "YOUR_TEAMS_WEBHOOK_URL_HERE";
+const TEAMS_WEBHOOK_URL = "https://avafinancialltd.webhook.office.com/webhookb2/f0a37630-3b42-468f-b1a5-7af974245202@a234d4e6-b5c1-4f59-b108-5a6e5b909ddb/IncomingWebhook/0f977ddf36fa4cf8ad3617b752345c81/4a42e6a8-e54c-48b5-b048-93e987f7990b/V281ENZLpmEzu5ICOAT_BaTKUxtFm7PnGRmQucEK6PAio1";
+
 
 const app = express();
 app.use(express.json());
