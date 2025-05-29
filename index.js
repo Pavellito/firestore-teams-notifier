@@ -7,49 +7,46 @@ const serviceAccount = require("./serviceAccountKey.json");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
+
 const db = admin.firestore();
 
 const TEAMS_WEBHOOK_URL = "https://avafinancialltd.webhook.office.com/webhookb2/f0a37630-3b42-468f-b1a5-7af974245202@a234d4e6-b5c1-4f59-b108-5a6e5b909ddb/IncomingWebhook/0f977ddf36fa4cf8ad3617b752345c81/4a42e6a8-e54c-48b5-b048-93e987f7990b/V281ENZLpmEzu5ICOAT_BaTKUxtFm7PnGRmQucEK6PAio1";
 
-
 const app = express();
 app.use(express.json());
 
+// Root endpoint for 5-minute remaining notices
 app.get("/", async (req, res) => {
   const now = Date.now();
   const snapshot = await db.collection("stations").get();
 
   let notified = [];
 
-  snapshot.forEach(doc => {
+  for (const doc of snapshot.docs) {
     const station = doc.data();
     if (station.status === "Occupied" && station.timestamp && station.duration) {
       const endTime = station.timestamp + station.duration * 60000;
       const timeRemaining = endTime - now;
 
-      if (timeRemaining < 5.5 * 60000 && timeRemaining > 4.5 * 60000) {
-        const msg = {
-          title: "⏰ Charging Time Ending Soon",
-          text: `Station **${station.name}** will be available in ~5 minutes.\nUser: **${station.user || "AvaCharge Admin"}**`
-        };
-
-        axios.post(TEAMS_WEBHOOK_URL, {
+      if (timeRemaining < 6 * 60000 && timeRemaining > 4 * 60000) {
+        await axios.post(TEAMS_WEBHOOK_URL, {
           "@type": "MessageCard",
           "@context": "http://schema.org/extensions",
-          "summary": msg.title,
+          "summary": "AvaCharge Admin",
           "themeColor": "0076D7",
-          "title": msg.title,
-          "text": msg.text
+          "title": "⏰ Charging Time Ending Soon",
+          "text": `Station **${station.name}** will be available in ~5 minutes.\nUser: **${station.user || "Unknown"}**`
         });
 
-        notified.push(station.name);
+        notified.push(`5min: ${station.name}`);
       }
     }
-  });
+  }
 
-  res.send(`✅ Notified stations: ${notified.join(", ") || "none"}`);
+  res.send(`✅ 5-min warnings sent: ${notified.join(", ") || "none"}`);
 });
 
+// Direct trigger from UI to notify Teams
 app.post("/notify", async (req, res) => {
   try {
     const { stationId, status, user, duration } = req.body;
@@ -64,6 +61,16 @@ app.post("/notify", async (req, res) => {
     const station = docSnap.data();
     let title = "";
     let text = "";
+
+    // Add message test for webhook debugging
+    await axios.post(TEAMS_WEBHOOK_URL, {
+      "@type": "MessageCard",
+      "@context": "http://schema.org/extensions",
+      "summary": "AvaCharge Admin",
+      "themeColor": "0076D7",
+      "title": "🔔 Test Notification",
+      "text": "✅ The webhook is active and listening."
+    });
 
     if (status === "Occupied") {
       title = "🔌 Station Occupied";
@@ -91,12 +98,12 @@ app.post("/notify", async (req, res) => {
 
       await docRef.update({ notifiedStatus: status });
 
-      res.send("✅ Notification sent");
+      res.send("✅ Notification sent to Teams");
     } else {
       res.status(400).send("Invalid status");
     }
   } catch (err) {
-    console.error(err);
+    console.error("❌ Teams notification error:", err.message);
     res.status(500).send("Server error");
   }
 });
