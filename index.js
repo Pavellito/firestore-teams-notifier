@@ -39,10 +39,10 @@ app.get("/", async (req, res) => {
         await axios.post(TEAMS_WEBHOOK_URL, {
           "@type": "MessageCard",
           "@context": "http://schema.org/extensions",
-          "summary": msg.title,
+          "summary": "AvaCharge Admin",
           "themeColor": "0076D7",
-          "title": msg.title,
-          "text": msg.text
+          "title": action,
+          "text": text
         });
 
         notified.push(`⚠️ TimeEnding: ${station.name}`);
