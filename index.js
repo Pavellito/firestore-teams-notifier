@@ -27,7 +27,7 @@ app.get("/", async (req, res) => {
       const endTime = data.timestamp + data.duration * 60000;
       const timeRemaining = endTime - now;
 
-      if (timeRemaining < 5.5 * 60000 && timeRemaining > 4.5 * 60000) {
+      if (timeRemaining < 6 * 60000 && timeRemaining > 2 * 60000) {
         const message = {
           "@type": "MessageCard",
           "@context": "http://schema.org/extensions",
