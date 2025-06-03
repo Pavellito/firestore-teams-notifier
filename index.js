@@ -1,5 +1,4 @@
 const express = require("express");
-const cors = require("cors");
 const admin = require("firebase-admin");
 const axios = require("axios");
 const serviceAccount = require("./serviceAccountKey.json");
@@ -9,13 +8,12 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
+
+const TEAMS_WEBHOOK_URL = "https://avafinancialltd.webhook.office.com/webhookb2/f0a37630-3b42-468f-b1a5-7af974245202@a234d4e6-b5c1-4f59-b108-5a6e5b909ddb/IncomingWebhook/0f977ddf36fa4cf8ad3617b752345c81/4a42e6a8-e54c-48b5-b048-93e987f7990b/V281ENZLpmEzu5ICOAT_BaTKUxtFm7PnGRmQucEK6PAio1";
+
 const app = express();
-app.use(cors()); // ✅ Allow Netlify frontend
 app.use(express.json());
 
-const TEAMS_WEBHOOK_URL = "https://avafinancialltd.webhook.office.com/webhookb2/f0a37630-3b42-468f-b1a5-7af974245202@a234d4e6-b5c1-4f59-b108-5a6e5b909ddb/IncomingWebhook/04c5baa8f40e4f4584acc23c8e68c568/4a42e6a8-e54c-48b5-b048-93e987f7990b/V2LweQhYmOVpE7Efx6e6Wz-g0O4qtI165HZakRBzwurYg1";
-
-// 1️⃣ Cron-based notification
 app.get("/", async (req, res) => {
   const now = Date.now();
   const snapshot = await db.collection("stations").get();
@@ -35,7 +33,7 @@ app.get("/", async (req, res) => {
           "summary": "AvaCharge Admin",
           "themeColor": "0076D7",
           "title": "⏰ Charging Time Ending Soon",
-          "text": `Station **${station.name}** will be available in ~5 minutes.\nUser: **${station.user || "Unknown"}**`
+          "text": `⚠️ Hey **${station.user || "AvaCharge Admin"}**, your charging session at **${station.name}** is ending soon. Please release the station.`
         });
 
         notified.push(`5min: ${station.name}`);
@@ -46,11 +44,9 @@ app.get("/", async (req, res) => {
   res.send(`✅ 5-min warnings sent: ${notified.join(", ") || "none"}`);
 });
 
-// 2️⃣ Frontend-triggered notifications
 app.post("/notify", async (req, res) => {
   try {
     const { stationId, status, user, duration } = req.body;
-    console.log("📨 Received notify request:", req.body);
 
     const docRef = db.collection("stations").doc(stationId);
     const docSnap = await docRef.get();
@@ -65,16 +61,16 @@ app.post("/notify", async (req, res) => {
 
     if (status === "Occupied") {
       title = "🔌 Station Occupied";
-      text = `Station: **${station.name}**\nUser: **${user || "AvaCharge Admin"}**\nEstimated duration: **${duration || "?"} mins**`;
+      text = `⚡ Station: **${station.name}**\nUser: **${user || "AvaCharge Admin"}**\nEstimated duration: **${duration || "?"} mins**`;
     } else if (status === "Waiting") {
       title = "📋 Joined Waiting List";
-      text = `User: **${user || "AvaCharge Admin"}** joined the waiting list for **${station.name}**`;
+      text = `⏳ **${user || "AvaCharge Admin"}** joined the waiting list for **${station.name}**`;
     } else if (status === "Free") {
       title = "✅ Station Now Free";
-      text = `Station: **${station.name}** is now available.`;
+      text = `🟢 Station **${station.name}** is now available. Please proceed to plug in if you're next in line.`;
     } else if (status === "LeftWaiting") {
       title = "❌ Left Waiting List";
-      text = `User: **${user || "AvaCharge Admin"}** left the waiting list for **${station.name}**`;
+      text = `🚫 **${user || "AvaCharge Admin"}** left the waiting list for **${station.name}**`;
     }
 
     if (title && text) {
@@ -89,14 +85,12 @@ app.post("/notify", async (req, res) => {
 
       await docRef.update({ notifiedStatus: status });
 
-      console.log(`✅ Sent Teams message: ${title}`);
       res.send("✅ Notification sent to Teams");
     } else {
-      console.log("⚠️ Invalid status sent to /notify");
       res.status(400).send("Invalid status");
     }
   } catch (err) {
-    console.error("❌ Error sending to Teams:", err.message);
+    console.error("❌ Teams notification error:", err.message);
     res.status(500).send("Server error");
   }
 });
