@@ -1,5 +1,5 @@
-
 const express = require("express");
+const cors = require("cors");
 const admin = require("firebase-admin");
 const axios = require("axios");
 const serviceAccount = require("./serviceAccountKey.json");
@@ -9,13 +9,13 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
+const app = express();
+app.use(cors()); // ✅ Allow Netlify frontend
+app.use(express.json());
 
 const TEAMS_WEBHOOK_URL = "https://avafinancialltd.webhook.office.com/webhookb2/f0a37630-3b42-468f-b1a5-7af974245202@a234d4e6-b5c1-4f59-b108-5a6e5b909ddb/IncomingWebhook/0f977ddf36fa4cf8ad3617b752345c81/4a42e6a8-e54c-48b5-b048-93e987f7990b/V281ENZLpmEzu5ICOAT_BaTKUxtFm7PnGRmQucEK6PAio1";
 
-const app = express();
-app.use(express.json());
-
-// Root endpoint for 5-minute remaining notices
+// 1️⃣ Cron-based notification
 app.get("/", async (req, res) => {
   const now = Date.now();
   const snapshot = await db.collection("stations").get();
@@ -46,10 +46,11 @@ app.get("/", async (req, res) => {
   res.send(`✅ 5-min warnings sent: ${notified.join(", ") || "none"}`);
 });
 
-// Direct trigger from UI to notify Teams
+// 2️⃣ Frontend-triggered notifications
 app.post("/notify", async (req, res) => {
   try {
     const { stationId, status, user, duration } = req.body;
+    console.log("📨 Received notify request:", req.body);
 
     const docRef = db.collection("stations").doc(stationId);
     const docSnap = await docRef.get();
@@ -62,16 +63,6 @@ app.post("/notify", async (req, res) => {
     let title = "";
     let text = "";
 
-    // Add message test for webhook debugging
-    await axios.post(TEAMS_WEBHOOK_URL, {
-      "@type": "MessageCard",
-      "@context": "http://schema.org/extensions",
-      "summary": "AvaCharge Admin",
-      "themeColor": "0076D7",
-      "title": "🔔 Test Notification",
-      "text": "✅ The webhook is active and listening."
-    });
-
     if (status === "Occupied") {
       title = "🔌 Station Occupied";
       text = `Station: **${station.name}**\nUser: **${user || "AvaCharge Admin"}**\nEstimated duration: **${duration || "?"} mins**`;
@@ -83,7 +74,7 @@ app.post("/notify", async (req, res) => {
       text = `Station: **${station.name}** is now available.`;
     } else if (status === "LeftWaiting") {
       title = "❌ Left Waiting List";
-      text = `User: **${user || "AvaCharge Admin"}** has left the waiting list for **${station.name}**`;
+      text = `User: **${user || "AvaCharge Admin"}** left the waiting list for **${station.name}**`;
     }
 
     if (title && text) {
@@ -98,12 +89,14 @@ app.post("/notify", async (req, res) => {
 
       await docRef.update({ notifiedStatus: status });
 
+      console.log(`✅ Sent Teams message: ${title}`);
       res.send("✅ Notification sent to Teams");
     } else {
+      console.log("⚠️ Invalid status sent to /notify");
       res.status(400).send("Invalid status");
     }
   } catch (err) {
-    console.error("❌ Teams notification error:", err.message);
+    console.error("❌ Error sending to Teams:", err.message);
     res.status(500).send("Server error");
   }
 });
