@@ -49,7 +49,7 @@ app.get("/", async (req, res) => {
 // 2️⃣ Frontend-triggered notifications
 app.post("/notify", async (req, res) => {
   try {
-    const { stationId, status, user, duration } = req.body;
+    const { stationId, status, user, duration, bookingTime } = req.body;
     console.log("📨 Received notify request:", req.body);
 
     const docRef = db.collection("stations").doc(stationId);
@@ -63,18 +63,35 @@ app.post("/notify", async (req, res) => {
     let title = "";
     let text = "";
 
-    if (status === "Occupied") {
-      title = "🔌 Station Occupied";
-      text = `Station: **${station.name}**\nUser: **${user || "AvaCharge Admin"}**\nEstimated duration: **${duration || "?"} mins**`;
-    } else if (status === "Waiting") {
-      title = "📋 Joined Waiting List";
-      text = `User: **${user || "AvaCharge Admin"}** joined the waiting list for **${station.name}**`;
-    } else if (status === "Free") {
-      title = "✅ Station Now Free";
-      text = `Station: **${station.name}** is now available.`;
-    } else if (status === "LeftWaiting") {
-      title = "❌ Left Waiting List";
-      text = `User: **${user || "AvaCharge Admin"}** left the waiting list for **${station.name}**`;
+    const normalizedStatus = status?.toLowerCase();
+
+    switch (normalizedStatus) {
+      case "occupied":
+        title = "🔌 Station Occupied";
+        text = `Station: **${station.name}**\nUser: **${user || "AvaCharge Admin"}**\nEstimated duration: **${duration || "?"} mins**`;
+        break;
+      case "free":
+        title = "✅ Station Now Free";
+        text = `Station: **${station.name}** is now available.`;
+        break;
+      case "waiting":
+      case "joined waiting list":
+        title = "📋 Joined Waiting List";
+        text = `User: **${user || "AvaCharge Admin"}** joined the waiting list for **${station.name}**`;
+        break;
+      case "leftwaiting":
+      case "left waiting list":
+        title = "❌ Left Waiting List";
+        text = `User: **${user || "AvaCharge Admin"}** left the waiting list for **${station.name}**`;
+        break;
+      case "booked":
+      case "booking":
+        title = "📅 Station Booked";
+        text = `User: **${user || "AvaCharge Admin"}** booked **${station.name}**${bookingTime ? ` at **${bookingTime}**` : ""}`;
+        break;
+      default:
+        title = `ℹ️ Station Status Update`;
+        text = `User: **${user || "AvaCharge Admin"}** updated **${station.name}** to status: **${status}**.`;
     }
 
     if (title && text) {
@@ -101,7 +118,5 @@ app.post("/notify", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-});
+// 3️⃣ Scheduled Daily Reset at 18:00 Israel Time
+app.post("/reset-daily", async (req, res) =
