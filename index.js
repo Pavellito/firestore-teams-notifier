@@ -10,7 +10,7 @@ admin.initializeApp({
 
 const db = admin.firestore();
 const app = express();
-app.use(cors()); // ✅ Allow Netlify frontend
+app.use(cors());
 app.use(express.json());
 
 const TEAMS_WEBHOOK_URL = "https://avafinancialltd.webhook.office.com/webhookb2/f0a37630-3b42-468f-b1a5-7af974245202@a234d4e6-b5c1-4f59-b108-5a6e5b909ddb/IncomingWebhook/0f977ddf36fa4cf8ad3617b752345c81/4a42e6a8-e54c-48b5-b048-93e987f7990b/V281ENZLpmEzu5ICOAT_BaTKUxtFm7PnGRmQucEK6PAio1";
@@ -19,7 +19,6 @@ const TEAMS_WEBHOOK_URL = "https://avafinancialltd.webhook.office.com/webhookb2/
 app.get("/", async (req, res) => {
   const now = Date.now();
   const snapshot = await db.collection("stations").get();
-
   let notified = [];
 
   for (const doc of snapshot.docs) {
@@ -32,10 +31,10 @@ app.get("/", async (req, res) => {
         await axios.post(TEAMS_WEBHOOK_URL, {
           "@type": "MessageCard",
           "@context": "http://schema.org/extensions",
-          "summary": "AvaCharge Admin",
-          "themeColor": "0076D7",
-          "title": "⏰ Charging Time Ending Soon",
-          "text": `Station **${station.name}** will be available in ~5 minutes.\nUser: **${station.user || "Unknown"}**`
+          summary: "AvaCharge Admin",
+          themeColor: "0076D7",
+          title: "⏰ Charging Time Ending Soon",
+          text: `Station **${station.name}** will be available in ~5 minutes.\nUser: **${station.user || "Unknown"}**`
         });
 
         notified.push(`5min: ${station.name}`);
@@ -98,10 +97,10 @@ app.post("/notify", async (req, res) => {
       await axios.post(TEAMS_WEBHOOK_URL, {
         "@type": "MessageCard",
         "@context": "http://schema.org/extensions",
-        "summary": "AvaCharge Admin",
-        "themeColor": "0076D7",
-        "title": title,
-        "text": text
+        summary: "AvaCharge Admin",
+        themeColor: "0076D7",
+        title,
+        text
       });
 
       await docRef.update({ notifiedStatus: status });
@@ -118,5 +117,48 @@ app.post("/notify", async (req, res) => {
   }
 });
 
-// 3️⃣ Scheduled Daily Reset at 18:00 Israel Time
-app.post("/reset-daily", async (req, res) =
+// 3️⃣ Scheduled daily reset
+app.post("/reset-daily", async (req, res) => {
+  const secret = req.headers["x-reset-key"];
+  if (secret !== "AVACHARGE2024") {
+    return res.status(403).send("Unauthorized");
+  }
+
+  try {
+    const snapshot = await db.collection("stations").get();
+
+    const updates = snapshot.docs.map(docRef =>
+      docRef.ref.update({
+        status: "Free",
+        user: "",
+        duration: 0,
+        timestamp: null,
+        booking: null,
+        waitingList: [],
+        notifiedStatus: "Free"
+      })
+    );
+
+    await Promise.all(updates);
+
+    await axios.post(TEAMS_WEBHOOK_URL, {
+      "@type": "MessageCard",
+      "@context": "http://schema.org/extensions",
+      summary: "AvaCharge Admin",
+      themeColor: "0076D7",
+      title: "🔁 Daily Auto-Reset at 18:00 (Israel Time)",
+      text: "All stations have been reset to **Free**. Bookings and waiting lists cleared."
+    });
+
+    console.log("✅ Daily reset completed");
+    res.send("✅ All stations reset to Free");
+  } catch (err) {
+    console.error("❌ Error during daily reset:", err.message);
+    res.status(500).send("❌ Reset failed");
+  }
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
